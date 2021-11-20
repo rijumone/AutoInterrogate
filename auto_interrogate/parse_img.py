@@ -1,15 +1,17 @@
-# from time import time
+from time import time
+import concurrent.futures
 import pytesseract
 from PIL import Image
 
-# t = time()
+t = time()
 QUES_COORDS = (0, 450, 1440, 930)
 OPTS_COORDS = [
-    (10, 900, 720, 1440),
-    (730, 900, 1440, 1440),
-    (10, 1430, 720, 1900),
-    (730, 1430, 1440, 1900),
+    (130, 944, 656, 1348),
+    (784, 944, 1300, 1348),
+    (130, 1453, 656, 1850),
+    (784, 1453, 1300, 1850),
 ]
+CROP_REDUCE_RATIO = 0.225
 
 def parse_question(img):
     q_img = img.crop(QUES_COORDS)
@@ -18,16 +20,31 @@ def parse_question(img):
 
 def parse_options(img):
     opt_texts = tuple()
-    for opt in OPTS_COORDS:
-        o_img = img.crop(opt)
-        # o_img.show()
-        opt_texts += (parse_text(o_img), )
+    
+    # for opt in OPTS_COORDS:
+    #     o_img = img.crop(opt)
+    #     opt_texts += (parse_text(o_img), )
+    
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        c_imgs = [img.crop(_) for _ in OPTS_COORDS]
+        results = executor.map(parse_text, c_imgs)
+        for result in results:
+            opt_texts += (result, )
+
+
+
     return opt_texts
+
+
 
 def parse_text(img):
     txt = ''
+    retry_ctr = 0
     while txt == '':
-        txt = pytesseract.image_to_string(img)
+        if retry_ctr >= 4:
+            txt = pytesseract.image_to_string(img, config='--psm 6')
+        else:
+            txt = pytesseract.image_to_string(img)
         txt = txt.strip()
         txt = txt.replace('\n', ' ')
         # hacks start
@@ -35,7 +52,8 @@ def parse_text(img):
         # txt = txt.lower()
         if txt != '':
             break
-        img = crop_reduce(img)
+        img = crop_reduce(img, ratio=CROP_REDUCE_RATIO)
+        retry_ctr += 1
         # img.show()
     return txt
 
@@ -70,9 +88,11 @@ if __name__ == '__main__':
         # 'Screenshot_20211007-104210_Indefinite.jpeg',
         # 'Screenshot_20211007-104213_Indefinite.jpeg',
         # 'Screenshot_20211007-104216_Indefinite.jpeg',
-        'screen.png',
+        # 'screen.png',
         # 'age.png',
         # 'kill.png',
+        # 'kill_1.png',
+        'kill_2.png',
     ]:
         img = load_img(f'auto_interrogate/res/raw/{raw}')
         
